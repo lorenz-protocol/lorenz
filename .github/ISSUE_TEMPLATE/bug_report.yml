@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a defect in the engine, decoders, backtester, or on-chain program
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For **security-sensitive** issues, do NOT file here —
+        follow [SECURITY.md](../blob/main/SECURITY.md) (private advisory) instead.
+  - type: input
+    id: component
+    attributes:
+      label: Component
+      description: Which crate or program? (e.g. lorenz-amm, lorenz-graph, lorenz-dex, lorenz-backtest, lorenz-agent, lorenz-stream, lorenz-wasm, programs/executor)
+      placeholder: lorenz-dex
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps, inputs, or a failing test. Determinism matters here — exact inputs help.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Rust version (`rustc --version`), and (if relevant) anchor/solana toolchain versions.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I confirmed this is not a security issue (those go through SECURITY.md).
+          required: true
+        - label: I searched existing issues for a duplicate.
+          required: true

@@ -1,0 +1,47 @@
+# Changelog
+
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims
+to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+This is a `0.x` experimental reference architecture: the public API and on-chain
+program are not yet stable.
+
+## [Unreleased]
+
+### Added
+- Open-source community files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+  top-level `SECURITY.md`, issue/PR templates, and Dependabot config.
+- `lorenz-wasm`: WebAssembly bindings exposing the deterministic engine
+  (`amount_out`, `find_arbitrage`, `screen`, `run_backtest`) to the browser,
+  verified against the native engine.
+
+## [0.1.0]
+
+Initial public reference architecture.
+
+### Added
+- `lorenz-core`: shared domain newtypes, strict typed config (`deny_unknown_fields`),
+  error type, and telemetry records.
+- `lorenz-amm`: constant-product AMM math in integer arithmetic, with property tests.
+- `lorenz-graph`: arbitrage detection as negative-cycle Bellman-Ford with cycle
+  reconstruction.
+- `lorenz-dex`: pool model, CPMM + single-tick CLMM quoting, and real account
+  decoders (SPL token accounts, Raydium AMM v4 / CP-Swap, Orca Whirlpool);
+  concentrated-liquidity venues that need tick math are honest `NotImplemented`.
+- `lorenz-stream`: transport-agnostic pool-update streaming with a deterministic
+  replay source; the Geyser/Yellowstone transport is a documented seam.
+- `lorenz-backtest`: deterministic replay/backtester with a full cost model and a
+  runnable binary over a bundled sample market.
+- `lorenz-agent`: control-plane primitives — rule-based risk manager + kill-switch,
+  decision ledger, parameter tuner, and an LLM orchestrator that clamps a closed
+  action set against hard ceilings.
+- `programs/executor`: on-chain atomic executor (Anchor) enforcing the safety
+  invariants (atomic-or-revert, no-loss profit floor, spend cap, scoped authority,
+  capped transparent fee). The flash-loan CPI and swap route are seams that
+  return `NotImplemented`.
+- Documentation: architecture, invariants, security, and architecture decision
+  records.
+
+### Notes
+- Experimental and unaudited. No profitability claims. MIT licensed.

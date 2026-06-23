@@ -1,0 +1,44 @@
+name: Feature request / roadmap item
+description: Propose new functionality or a seam to wire up (e.g. a new DEX decoder, the flash-loan CPI)
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lorenz Protocol labels unfinished work as **seams** (🟡, typed + `NotImplemented`)
+        or **roadmap** (🔭). See [docs/architecture/10-roadmap-and-seams.md](../blob/main/docs/architecture/10-roadmap-and-seams.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do, and why can't you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How might this work? If it's an existing seam (a CLMM/DLMM decoder, the Kamino flash-loan CPI, the Geyser transport, a live LLM client), reference it.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New DEX decoder / venue
+        - On-chain program (flash-loan CPI, swap route)
+        - Streaming / live transport
+        - Control plane / agent
+        - Backtester / cost model
+        - WASM / demos
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: honesty
+    attributes:
+      label: Honesty
+      options:
+        - label: I understand stubs must return `NotImplemented`, not fake success, and that no fabricated metrics are accepted (see ADR 0004).
+          required: true

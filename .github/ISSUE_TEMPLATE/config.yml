@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/lorenz-protocol/lorenz/security/advisories/new
+    about: Report security issues privately via a GitHub Security Advisory — do not open a public issue.
+  - name: Architecture & invariants
+    url: https://github.com/lorenz-protocol/lorenz/blob/main/docs/architecture/README.md
+    about: Read the architecture deep-dive and the invariants before proposing substantial changes.
