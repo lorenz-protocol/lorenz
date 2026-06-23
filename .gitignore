@@ -17,6 +17,11 @@ config.local.toml
 .env
 .env.*
 
+# WASM / JS build artifacts (regenerate with `wasm-pack build`; see crates/lorenz-wasm/README.md)
+crates/lorenz-wasm/pkg
+crates/lorenz-wasm/pkg-node
+node_modules
+
 # Editor / OS
 .DS_Store
 .idea

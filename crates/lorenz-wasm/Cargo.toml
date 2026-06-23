@@ -1,0 +1,24 @@
+[package]
+name = "lorenz-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "WebAssembly facade exposing the real Lorenz deterministic arbitrage engine to the browser (string-JSON API)."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+lorenz-core = { workspace = true }
+lorenz-amm = { workspace = true }
+lorenz-graph = { workspace = true }
+lorenz-dex = { workspace = true }
+lorenz-backtest = { workspace = true }

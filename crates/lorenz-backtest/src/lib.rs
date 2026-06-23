@@ -87,7 +87,7 @@ impl CostModel {
 }
 
 /// Aggregated result of a backtest run.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BacktestReport {
     pub records: Vec<TradeRecord>,
     pub candidates_found: usize,

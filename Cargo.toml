@@ -8,6 +8,7 @@ members = [
     "crates/lorenz-backtest",
     "crates/lorenz-agent",
     "crates/lorenz-stream",
+    "crates/lorenz-wasm",
 ]
 # The on-chain program lives in `programs/` and is built with the Solana/Anchor
 # toolchain (`anchor build`). It is intentionally excluded from the host
@@ -38,6 +39,7 @@ lorenz-core = { path = "crates/lorenz-core" }
 lorenz-amm = { path = "crates/lorenz-amm" }
 lorenz-graph = { path = "crates/lorenz-graph" }
 lorenz-dex = { path = "crates/lorenz-dex" }
+lorenz-backtest = { path = "crates/lorenz-backtest" }
 lorenz-agent = { path = "crates/lorenz-agent" }
 lorenz-stream = { path = "crates/lorenz-stream" }
 
