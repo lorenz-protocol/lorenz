@@ -1,0 +1,15 @@
+[package]
+name = "lorenz-amm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Deterministic AMM math (constant-product) with integer settlement and property tests."
+
+[dependencies]
+lorenz-core = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

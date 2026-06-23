@@ -1,0 +1,13 @@
+[package]
+name = "lorenz-graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Arbitrage cycle detection over a token graph via negative-cycle Bellman-Ford."
+
+[dependencies]
+lorenz-core = { workspace = true }
+tracing = { workspace = true }

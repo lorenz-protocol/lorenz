@@ -1,0 +1,22 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+lorenz_executor = "E5Mj85eZNW9s2fhceFT56sZFQezXiVNJ7QKZv5vp1RxA"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "echo 'add anchor mocha tests here'"
+
+# Note: this Anchor program is intentionally excluded from the host Cargo
+# workspace (see the root Cargo.toml `exclude`) so that `cargo test` stays
+# toolchain-free. Build it explicitly with `anchor build`.

@@ -1,0 +1,70 @@
+{
+  "base_token": "SOL",
+  "notional": 1000000000,
+  "snapshots": [
+    {
+      "ts": 1700000000,
+      "pools": [
+        {
+          "id": "sol_usdc_raydium",
+          "dex": "raydium_amm",
+          "token_a": "SOL",
+          "token_b": "USDC",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1000000000000,
+          "fee_bps": 1
+        },
+        {
+          "id": "usdc_bonk_meteora",
+          "dex": "meteora_dlmm",
+          "token_a": "USDC",
+          "token_b": "BONK",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1000000000000,
+          "fee_bps": 1
+        },
+        {
+          "id": "bonk_sol_whirlpool",
+          "dex": "whirlpool",
+          "token_a": "BONK",
+          "token_b": "SOL",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1050000000000,
+          "fee_bps": 1
+        }
+      ]
+    },
+    {
+      "ts": 1700000060,
+      "pools": [
+        {
+          "id": "sol_usdc_raydium",
+          "dex": "raydium_amm",
+          "token_a": "SOL",
+          "token_b": "USDC",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1000000000000,
+          "fee_bps": 25
+        },
+        {
+          "id": "usdc_bonk_meteora",
+          "dex": "meteora_dlmm",
+          "token_a": "USDC",
+          "token_b": "BONK",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1000000000000,
+          "fee_bps": 25
+        },
+        {
+          "id": "bonk_sol_whirlpool",
+          "dex": "whirlpool",
+          "token_a": "BONK",
+          "token_b": "SOL",
+          "reserve_a": 1000000000000,
+          "reserve_b": 1000000000000,
+          "fee_bps": 25
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lorenz-core",
+    "crates/lorenz-amm",
+    "crates/lorenz-graph",
+    "crates/lorenz-dex",
+    "crates/lorenz-backtest",
+    "crates/lorenz-agent",
+    "crates/lorenz-stream",
+]
+# The on-chain program lives in `programs/` and is built with the Solana/Anchor
+# toolchain (`anchor build`). It is intentionally excluded from the host
+# workspace so that `cargo test` at the root stays fast and toolchain-free.
+exclude = ["programs/executor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/lorenz-protocol/lorenz"
+authors = ["Lorenz Protocol contributors"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+proptest = "1"
+bs58 = "0.5"
+
+# Internal crates
+lorenz-core = { path = "crates/lorenz-core" }
+lorenz-amm = { path = "crates/lorenz-amm" }
+lorenz-graph = { path = "crates/lorenz-graph" }
+lorenz-dex = { path = "crates/lorenz-dex" }
+lorenz-agent = { path = "crates/lorenz-agent" }
+lorenz-stream = { path = "crates/lorenz-stream" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

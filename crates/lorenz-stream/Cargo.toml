@@ -1,0 +1,16 @@
+[package]
+name = "lorenz-stream"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Transport-agnostic pool-update streaming that feeds the arbitrage detector."
+
+[dependencies]
+lorenz-core = { workspace = true }
+lorenz-dex = { workspace = true }
+lorenz-graph = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

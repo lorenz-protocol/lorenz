@@ -1,0 +1,16 @@
+[package]
+name = "lorenz-dex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+description = "Pool model, quoting, and account-decoder traits for supported Solana DEXs."
+
+[dependencies]
+lorenz-core = { workspace = true }
+lorenz-amm = { workspace = true }
+lorenz-graph = { workspace = true }
+thiserror = { workspace = true }
+bs58 = { workspace = true }
