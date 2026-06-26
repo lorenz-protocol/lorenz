@@ -1,5 +1,9 @@
 # Lorenz Protocol — deterministic, non-custodial on-chain arbitrage
 
+[![CI](https://github.com/lorenz-protocol/lorenz/actions/workflows/ci.yml/badge.svg)](https://github.com/lorenz-protocol/lorenz/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#what-this-repository-is-and-is-not)
+
 > Experimental, open-source research platform for atomic, flash-loan-funded
 > arbitrage on Solana, with an agentic control plane and safety guarantees
 > enforced on-chain.
@@ -12,6 +16,19 @@ not trade live yet, it has not been audited, and nothing here is financial advic
 See [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
+
+## Contents
+
+- [Why this exists](#why-this-exists)
+- [What this repository is (and is not)](#what-this-repository-is-and-is-not)
+- [Core idea in one picture](#core-idea-in-one-picture)
+- [What actually works today](#what-actually-works-today-verifiable)
+- [Production requirements](#production-requirements-what-a-live-deployment-additionally-needs)
+- [Repository layout](#repository-layout)
+- [Quick start](#quick-start)
+- [Design principles](#design-principles)
+- [Contributing & security](#contributing--security)
+- [License](#license)
 
 ## Why this exists
 
@@ -117,7 +134,8 @@ production build (option B above):
 - The LLM-backed agent on top of the control-plane primitives.
 - Multi-tenant onboarding and the non-custodial vault UX.
 
-See the phased plan in `.cursor/plans` / [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the architecture decision
+records in [docs/adr/](docs/adr/).
 
 ## Repository layout
 
@@ -141,6 +159,9 @@ docs/
 
 ## Quick start
 
+The Rust toolchain is pinned by [`rust-toolchain.toml`](rust-toolchain.toml);
+CI runs on `stable` and is the source of truth for supported versions.
+
 ```sh
 # Off-chain workspace (no Solana toolchain needed)
 cargo test --workspace
@@ -160,6 +181,13 @@ anchor build
    is fabricated.
 4. **Non-custodial by design.** Users keep ownership of their vault; the bot
    gets a scoped delegate that cannot withdraw.
+
+## Contributing & security
+
+Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). To report a vulnerability, follow
+[SECURITY.md](SECURITY.md) — please do not open a public issue for security
+bugs. Release history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
