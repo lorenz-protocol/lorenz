@@ -9,14 +9,7 @@ program are not yet stable.
 
 ## [Unreleased]
 
-### Added
-- Open-source community files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-  top-level `SECURITY.md`, issue/PR templates, and Dependabot config.
-- `lorenz-wasm`: WebAssembly bindings exposing the deterministic engine
-  (`amount_out`, `find_arbitrage`, `screen`, `run_backtest`) to the browser,
-  verified against the native engine.
-
-## [0.1.0]
+## [0.1.0] - 2026-06-26
 
 Initial public reference architecture.
 
@@ -40,8 +33,16 @@ Initial public reference architecture.
   invariants (atomic-or-revert, no-loss profit floor, spend cap, scoped authority,
   capped transparent fee). The flash-loan CPI and swap route are seams that
   return `NotImplemented`.
+- `lorenz-wasm`: WebAssembly bindings exposing the deterministic engine
+  (`amount_out`, `find_arbitrage`, `screen`, `run_backtest`) to the browser,
+  verified against the native engine.
 - Documentation: architecture, invariants, security, and architecture decision
   records.
+- Open-source community files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+  top-level `SECURITY.md`, issue/PR templates, and Dependabot config.
 
 ### Notes
 - Experimental and unaudited. No profitability claims. MIT licensed.
+
+[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lorenz-protocol/lorenz/releases/tag/v0.1.0
