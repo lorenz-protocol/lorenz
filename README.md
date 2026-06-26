@@ -8,7 +8,7 @@
 
 **Status: experimental. Not production. No profitability claims.**
 This repository is an engineering foundation under active development. It does
-not trade live, it has not been audited, and nothing here is financial advice.
+not trade live yet, it has not been audited, and nothing here is financial advice.
 See [DISCLAIMER.md](DISCLAIMER.md).
 
 ---
