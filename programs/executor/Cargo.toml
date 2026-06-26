@@ -22,8 +22,11 @@ anchor-lang = "0.30.1"
 anchor-spl = "0.30.1"
 
 [lints.rust]
-# Anchor's `#[derive(Accounts)]` expands to `#[cfg(feature = "anchor-debug")]`,
-# a feature we deliberately do not expose. Declare it as an expected cfg so the
-# crate builds clean under CI's global `-D warnings` (this macro output is
-# outside our control).
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("anchor-debug"))'] }
+# Anchor's `#[program]` / `#[derive(Accounts)]` macros expand to cfgs that come
+# from `solana_program` and are only meaningful on the Solana BPF target —
+# `target_os = "solana"`, `feature = "custom-heap"`, `feature = "custom-panic"`,
+# `feature = "anchor-debug"`. On the host-side build/test these read as
+# "unexpected", and `-D warnings` turns them into errors. This is framework
+# macro output we do not control, so we disable the lint for this crate only;
+# the rest of the workspace keeps `-D warnings` fully strict.
+unexpected_cfgs = "allow"
