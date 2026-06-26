@@ -61,10 +61,10 @@ jobs:
           key: ${{ runner.os }}-onchain-${{ hashFiles('programs/executor/Cargo.toml') }}
 
       # Host-side check + unit tests of the pure arithmetic/guards. The Anchor
-      # `Accounts` derive emits benign `anchor-debug` cfg warnings outside our
-      # control, so we do not treat warnings as errors for this crate. A full
-      # `anchor build` / localnet test run requires the Solana toolchain and is
-      # run separately.
+      # `Accounts` derive emits an `anchor-debug` cfg that we declare as expected
+      # in programs/executor/Cargo.toml (`[lints.rust]`), so the crate builds
+      # clean under the global `-D warnings`. A full `anchor build` / localnet
+      # test run requires the Solana toolchain and is run separately.
       - name: Build + test on-chain program
         working-directory: programs/executor
         run: cargo test --lib
