@@ -9,6 +9,17 @@ program are not yet stable.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-28
+
+### Added
+- `lorenz-backtest`: a `--json` flag (plus `--help`) on the runnable binary that
+  emits the full deterministic backtest result as a single JSON document for
+  downstream tooling. Default human-readable output is unchanged.
+- `lorenz-amm`: exact-output (inverse) constant-product swap math
+  `CpmmReserves::amount_in_for_exact_out` — the minimum input for a desired
+  output, integer-exact and rounded so the pool is never short-changed, with
+  property tests proving round-trip, minimality, and monotonicity.
+
 ## [0.1.0] - 2026-06-26
 
 Initial public reference architecture.
@@ -44,5 +55,6 @@ Initial public reference architecture.
 ### Notes
 - Experimental and unaudited. No profitability claims. MIT licensed.
 
-[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lorenz-protocol/lorenz/releases/tag/v0.1.0
