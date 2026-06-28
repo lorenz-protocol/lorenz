@@ -265,4 +265,25 @@ mod tests {
         // Gross profit is positive on this constructed mispricing.
         assert!(rec.gross_profit > 0, "gross was {}", rec.gross_profit);
     }
+
+    #[test]
+    fn report_serializes_and_round_trips_over_bundled_sample() {
+        // The same embedded market the `lorenz-backtest` binary replays, so the
+        // JSON mode is exercised against real computed values, not a fixture.
+        const SAMPLE_MARKET: &str = include_str!("../data/sample_market.json");
+
+        let market = parse_market(SAMPLE_MARKET).expect("bundled sample market is valid JSON");
+        let report = run_backtest(&market, &risk(), &costs());
+
+        // Serializes without error...
+        let json = serde_json::to_string_pretty(&report).expect("report serializes to JSON");
+        // ...and round-trips back into an equivalent value.
+        let parsed: BacktestReport =
+            serde_json::from_str(&json).expect("report round-trips from JSON");
+
+        assert_eq!(parsed.candidates_found, report.candidates_found);
+        assert_eq!(parsed.profitable_after_costs, report.profitable_after_costs);
+        assert_eq!(parsed.total_net_profit, report.total_net_profit);
+        assert_eq!(parsed.records, report.records);
+    }
 }
