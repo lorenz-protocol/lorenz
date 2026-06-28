@@ -98,7 +98,10 @@ impl CpmmReserves {
 
         // in_after_fee = ceil(reserve_in * out / (reserve_out - out)).
         let denominator = self.reserve_out - amount_out;
-        let in_after_fee = self.reserve_in.checked_mul(amount_out)?.div_ceil(denominator);
+        let in_after_fee = self
+            .reserve_in
+            .checked_mul(amount_out)?
+            .div_ceil(denominator);
 
         // amount_in = ceil(in_after_fee * fee_den / fee_num), inverting the
         // input-side fee with the input rounded up.
@@ -174,10 +177,19 @@ mod tests {
         assert_eq!(p.amount_in_for_exact_out(1_000_000), None);
         assert_eq!(p.amount_in_for_exact_out(1_000_001), None);
         // Empty reserves: no positive output is reachable.
-        assert_eq!(CpmmReserves::new(0, 1_000_000, Bps(30)).amount_in_for_exact_out(1), None);
-        assert_eq!(CpmmReserves::new(1_000_000, 0, Bps(30)).amount_in_for_exact_out(1), None);
+        assert_eq!(
+            CpmmReserves::new(0, 1_000_000, Bps(30)).amount_in_for_exact_out(1),
+            None
+        );
+        assert_eq!(
+            CpmmReserves::new(1_000_000, 0, Bps(30)).amount_in_for_exact_out(1),
+            None
+        );
         // A 100% fee leaves nothing after the fee.
-        assert_eq!(CpmmReserves::new(1_000_000, 1_000_000, Bps(10_000)).amount_in_for_exact_out(1), None);
+        assert_eq!(
+            CpmmReserves::new(1_000_000, 1_000_000, Bps(10_000)).amount_in_for_exact_out(1),
+            None
+        );
     }
 
     proptest! {
