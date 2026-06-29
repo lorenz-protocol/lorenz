@@ -75,6 +75,15 @@ impl Bps {
     pub fn as_fraction(self) -> f64 {
         f64::from(self.0) / f64::from(Self::DENOMINATOR)
     }
+
+    /// After-fee numerator `DENOMINATOR - self.0`, i.e. the basis points left
+    /// once the fee is taken. Returns `None` when the fee exceeds 100%
+    /// (`self.0 > DENOMINATOR`), so callers can reject an out-of-range fee
+    /// instead of underflowing.
+    #[inline]
+    pub fn fee_complement(self) -> Option<u32> {
+        Self::DENOMINATOR.checked_sub(self.0)
+    }
 }
 
 impl fmt::Display for Bps {
@@ -108,6 +117,16 @@ mod tests {
         assert_eq!(Bps(10_000).as_fraction(), 1.0);
         assert_eq!(Bps(25).as_fraction(), 0.0025);
         assert_eq!(Bps(0).as_fraction(), 0.0);
+    }
+
+    #[test]
+    fn bps_fee_complement() {
+        // A normal fee leaves the rest of the basis points.
+        assert_eq!(Bps(30).fee_complement(), Some(9_970));
+        // Exactly 100% leaves nothing, but is still in range.
+        assert_eq!(Bps(10_000).fee_complement(), Some(0));
+        // Over 100% has no complement.
+        assert_eq!(Bps(10_001).fee_complement(), None);
     }
 
     #[test]

@@ -37,13 +37,15 @@ impl CpmmReserves {
     /// out = reserve_out * in_after_fee / (reserve_in + in_after_fee)
     /// ```
     ///
-    /// Returns `None` on degenerate input (empty reserves) rather than
-    /// producing a misleading zero.
+    /// Returns `Some(0)` for degenerate input — empty reserves or a zero input
+    /// amount both yield a zero output. Returns `None` only when the swap cannot
+    /// be priced at all: a fee above 100% (`fee > 10_000` bps) or an
+    /// intermediate multiplication that would overflow `u128`.
     pub fn amount_out(&self, amount_in: u128) -> Option<u128> {
         if self.reserve_in == 0 || self.reserve_out == 0 || amount_in == 0 {
             return Some(0);
         }
-        let fee_num = u128::from(Bps::DENOMINATOR - self.fee.0);
+        let fee_num = u128::from(self.fee.fee_complement()?);
         let fee_den = u128::from(Bps::DENOMINATOR);
 
         let in_after_fee = amount_in.checked_mul(fee_num)? / fee_den;
@@ -89,7 +91,7 @@ impl CpmmReserves {
         if self.reserve_in == 0 || self.reserve_out == 0 || amount_out >= self.reserve_out {
             return None;
         }
-        let fee_num = u128::from(Bps::DENOMINATOR - self.fee.0);
+        let fee_num = u128::from(self.fee.fee_complement()?);
         let fee_den = u128::from(Bps::DENOMINATOR);
         // A 100% fee leaves nothing after the fee, so no output is reachable.
         if fee_num == 0 {
@@ -273,6 +275,25 @@ mod tests {
             let in_lo = p.amount_in_for_exact_out(lo).unwrap();
             let in_hi = p.amount_in_for_exact_out(hi).unwrap();
             prop_assert!(in_lo <= in_hi);
+        }
+
+        // A fee above 100% has no after-fee complement, so both swap
+        // directions must return None and never underflow/panic, for any
+        // positive reserves and amounts. (Exactly 100% is the boundary: the
+        // complement is Some(0), so amount_out yields Some(0) and the inverse
+        // None, both exercised by the unit tests above.)
+        #[test]
+        fn over_full_fee_is_none(
+            r_in in 1u128..1_000_000_000,
+            r_out in 1u128..1_000_000_000,
+            amt in 1u128..1_000_000_000,
+            fee in 10_001u32..=u32::MAX,
+        ) {
+            let p = CpmmReserves::new(r_in, r_out, Bps(fee));
+            // Reserves and amount are positive, so the fee is actually applied
+            // rather than short-circuited.
+            prop_assert_eq!(p.amount_out(amt), None);
+            prop_assert_eq!(p.amount_in_for_exact_out(amt), None);
         }
 
         // Unreachable requests return None rather than panicking.
