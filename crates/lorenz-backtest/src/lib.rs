@@ -322,8 +322,8 @@ mod tests {
         // never worse than at the old fixed size. (Exact numbers now depend on
         // the search and are verified by the property tests in `lorenz-amm`.)
         let fixed = u128::from(market.notional.min(risk().max_position));
-        let fixed_net = first_cycle_net(&market, &risk(), &costs(), fixed)
-            .expect("fixed-size cycle simulates");
+        let fixed_net =
+            first_cycle_net(&market, &risk(), &costs(), fixed).expect("fixed-size cycle simulates");
         assert!(
             rec.net_profit >= fixed_net,
             "optimal net {} < fixed net {fixed_net}",
