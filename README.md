@@ -96,7 +96,9 @@ the chain itself refuses any trade that would lose money or exceed the cap.
 These are implemented and covered by tests (`cargo test`):
 
 - **`lorenz-amm`** — constant-product AMM math in integer arithmetic, with
-  property tests for the invariants any correct AMM must satisfy.
+  property tests for the invariants any correct AMM must satisfy. Includes the
+  exact-output (inverse) swap `amount_in_for_exact_out`, and a checked fee bound
+  so an out-of-range fee returns `None` instead of overflowing.
 - **`lorenz-graph`** — arbitrage detection as negative-cycle Bellman-Ford over a
   token graph, with cycle reconstruction.
 - **`lorenz-dex`** — pool model + quoting + real account decoders. SPL token
@@ -107,8 +109,9 @@ These are implemented and covered by tests (`cargo test`):
   `ReplaySource` drives the detector end-to-end; the Geyser/Yellowstone
   transport is a typed, documented production seam.
 - **`lorenz-backtest`** — a deterministic replay/backtester with a full cost
-  model (flash-loan fee, priority fee, Jito tip, slippage). Runnable on a
-  bundled sample market: `cargo run -p lorenz-backtest`.
+  model (flash-loan fee, priority fee, Jito tip, slippage). Runs on a bundled
+  sample market, or any external market via `--market <FILE>`, with optional
+  machine-readable `--json` output: `cargo run -p lorenz-backtest -- --json`.
 - **`lorenz-agent`** — control-plane primitives plus an **LLM orchestrator**: the
   model may only return one action from a closed set, and every value is clamped
   against hard ceilings before it is applied (a hallucination cannot widen a cap

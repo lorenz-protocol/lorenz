@@ -1,0 +1,58 @@
+name: Discrepancy report
+description: A README/docs claim that isn't backed by the code or the chain
+labels: ["discrepancy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every claim in this repo must be verifiable from the code or the chain, or be
+        explicitly labelled roadmap. If you found one that isn't, that's a bug — thank you
+        for flagging it. See [ADR 0004](../blob/main/docs/adr/0004-honesty-and-strict-config.md).
+  - type: input
+    id: claim-location
+    attributes:
+      label: Where does the claim appear?
+      description: File and section or line (e.g. README.md "Performance", docs/ARCHITECTURE.md:42).
+      placeholder: README.md, "How it works" section
+    validations:
+      required: true
+  - type: textarea
+    id: claim-vs-reality
+    attributes:
+      label: Claim vs. reality
+      description: What does the claim say, and what does the code or chain actually do instead?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Point at the proof — file:line, command output, a transaction signature, a failing assertion.
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - README / top-level docs
+        - Architecture docs / ADRs
+        - Engine / decoders (lorenz-amm, lorenz-graph, lorenz-dex)
+        - Backtester / cost model (lorenz-backtest)
+        - Control plane / agent (lorenz-agent)
+        - Streaming / live transport (lorenz-stream)
+        - On-chain program (programs/executor)
+        - WASM / demos (lorenz-wasm)
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This is a discrepancy, not a roadmap (🔭) or seam (🟡) item that's already labelled as unfinished.
+          required: true
+        - label: I searched existing issues for a duplicate.
+          required: true

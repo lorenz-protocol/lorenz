@@ -24,6 +24,23 @@ Concretely, a contribution must not:
 If something is a roadmap item, label it as one (🔭). If it's a typed
 integration seam, keep it that way (🟡) until it's genuinely wired.
 
+### Adding a seam honestly
+
+A seam is unfinished work wired up the honest way. The pattern:
+
+1. Define a real, compiling type with the right signature — not a placeholder
+   that the compiler ignores.
+2. Have it return an explicit `NotImplemented` error
+   (`ExecutorError::NotImplemented`, `DecodeError::NotImplemented`,
+   `StreamError::NotImplemented`), never a fabricated success or a silent no-op.
+3. Mark it with a doc comment identifying it as a seam (🟡) so it shows up as
+   unfinished, not as a working feature.
+4. Add a test asserting the path returns `NotImplemented`, so the seam stays a
+   seam until someone genuinely wires it.
+
+See [docs/architecture/10-roadmap-and-seams.md](docs/architecture/10-roadmap-and-seams.md)
+for the catalogue of current seams and the conventions around them.
+
 ## Design principles to respect
 
 - **Determinism in the data plane.** No floating-point money: settlement amounts
