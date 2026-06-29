@@ -9,6 +9,27 @@ program are not yet stable.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-29
+
+### Added
+- `lorenz-backtest`: a `--market <FILE>` flag to replay an external market JSON
+  file, falling back to the bundled sample when omitted.
+- `lorenz-amm`: `optimal_cycle_size` and `maximize_unimodal` — net-profit-maximizing
+  trade sizing for an arbitrage cycle via a unimodal (ternary narrowing +
+  local-refine) search, with property tests against brute force.
+- A "Discrepancy report" issue template and an "adding a seam honestly"
+  CONTRIBUTING guide, operationalizing the project's honesty principle.
+
+### Changed
+- `lorenz-backtest`: each arbitrage trade is now sized at the net-profit-maximizing
+  input (capped by the risk ceiling) instead of a fixed notional.
+- Corrected the `lorenz-amm::amount_out` doc to match its actual degenerate-input
+  behavior (`Some(0)`), and refreshed the README capabilities list.
+
+### Fixed
+- `lorenz-amm`: a fee-complement underflow when a pool's fee exceeded 100%;
+  out-of-range fees now return `None` via the checked `Bps::fee_complement`.
+
 ## [0.2.0] - 2026-06-28
 
 ### Added
@@ -55,6 +76,7 @@ Initial public reference architecture.
 ### Notes
 - Experimental and unaudited. No profitability claims. MIT licensed.
 
-[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lorenz-protocol/lorenz/releases/tag/v0.1.0
