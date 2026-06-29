@@ -13,6 +13,7 @@
 //! purpose: simulated economics use the same numbers as production accounting,
 //! so a backtest can't quietly be more optimistic than reality.
 
+use lorenz_amm::maximize_unimodal;
 use lorenz_core::config::{CostConfig, RiskConfig};
 use lorenz_core::telemetry::{Hop, TradeRecord};
 use lorenz_core::types::{Amount, Bps, Dex, PoolId, TokenId};
@@ -152,6 +153,25 @@ pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> B
         };
         report.candidates_found += 1;
 
+        // Size the trade at the input that maximizes *net* profit, capped by the
+        // risk ceiling. The cycle output is concave-increasing in the input
+        // while the input and the (linear) cost subtracted from it are linear,
+        // so net profit is unimodal and a ternary search finds the optimum.
+        // `simulate_cycle` is the per-size oracle; the hop count (and therefore
+        // the cost shape) is fixed for the cycle, so it is read once.
+        let hops = cycle.edges.len();
+        let max_input = u128::from(risk.max_position);
+        let net_at = |input: u128| -> Option<i128> {
+            let (_, out) = simulate_cycle(&pools, &cycle, &base, input)?;
+            let out = i128::try_from(out).ok()?;
+            let input_i = i128::try_from(input).ok()?;
+            let cost = i128::try_from(cost_model.total_cost(input, hops)).ok()?;
+            Some(out - input_i - cost)
+        };
+        let Some((notional, _)) = maximize_unimodal(max_input, net_at) else {
+            continue;
+        };
+
         let Some((route, final_out)) = simulate_cycle(&pools, &cycle, &base, notional) else {
             continue;
         };
@@ -203,6 +223,34 @@ mod tests {
             min_profit: 1,
             max_consecutive_losses: 5,
         }
+    }
+
+    /// Net profit at a fixed input `size` for the cycle detected in the first
+    /// snapshot, mirroring exactly how `run_backtest` builds the graph and the
+    /// cost model. Used to pin the "optimal is never worse than fixed-size"
+    /// invariant without hardcoding numbers we cannot recompute by hand.
+    fn first_cycle_net(
+        market: &Market,
+        risk: &RiskConfig,
+        costs: &CostConfig,
+        size: u128,
+    ) -> Option<i128> {
+        let base = TokenId(market.base_token.clone());
+        let probe = u128::from(market.notional.min(risk.max_position));
+        let snap = market.snapshots.first()?;
+        let mut graph = ArbitrageGraph::new();
+        let mut pools: HashMap<PoolId, CpmmPool> = HashMap::new();
+        for ps in &snap.pools {
+            let pool = ps.to_pool();
+            for edge in pool.edges(probe) {
+                graph.add_edge(edge);
+            }
+            pools.insert(pool.id.clone(), pool);
+        }
+        let cycle = graph.find_arbitrage()?;
+        let (route, out) = simulate_cycle(&pools, &cycle, &base, size)?;
+        let cm = CostModel::new(costs.clone());
+        Some(out as i128 - size as i128 - cm.total_cost(size, route.len()) as i128)
     }
 
     #[test]
@@ -264,6 +312,25 @@ mod tests {
         assert_eq!(rec.route.last().unwrap().token_out, "SOL".into());
         // Gross profit is positive on this constructed mispricing.
         assert!(rec.gross_profit > 0, "gross was {}", rec.gross_profit);
+
+        // The chosen size respects the risk ceiling and is a real, positive
+        // notional rather than the old fixed `min(notional, max_position)`.
+        let chosen = u128::from(rec.notional.0);
+        assert!((1..=u128::from(risk().max_position)).contains(&chosen));
+
+        // Optimality invariant: the net profit at the optimally sized trade is
+        // never worse than at the old fixed size. (Exact numbers now depend on
+        // the search and are verified by the property tests in `lorenz-amm`.)
+        let fixed = u128::from(market.notional.min(risk().max_position));
+        let fixed_net = first_cycle_net(&market, &risk(), &costs(), fixed)
+            .expect("fixed-size cycle simulates");
+        assert!(
+            rec.net_profit >= fixed_net,
+            "optimal net {} < fixed net {fixed_net}",
+            rec.net_profit
+        );
+        // The constructed mispricing is large enough to remain profitable.
+        assert!(rec.submitted);
     }
 
     #[test]
@@ -274,6 +341,21 @@ mod tests {
 
         let market = parse_market(SAMPLE_MARKET).expect("bundled sample market is valid JSON");
         let report = run_backtest(&market, &risk(), &costs());
+
+        // Structural invariants that hold regardless of the (search-dependent)
+        // exact figures: every recorded trade is sized within `1..=max_position`,
+        // and the submitted set is exactly the profitable-after-costs count.
+        let max_pos = u128::from(risk().max_position);
+        let mut submitted: usize = 0;
+        for rec in &report.records {
+            let chosen = u128::from(rec.notional.0);
+            assert!((1..=max_pos).contains(&chosen));
+            if rec.submitted {
+                assert!(rec.net_profit >= i128::from(risk().min_profit));
+                submitted += 1;
+            }
+        }
+        assert_eq!(submitted, report.profitable_after_costs);
 
         // Serializes without error...
         let json = serde_json::to_string_pretty(&report).expect("report serializes to JSON");
