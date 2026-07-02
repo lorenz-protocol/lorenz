@@ -130,6 +130,9 @@ fn simulate_cycle(
     Some((hops, amount))
 }
 
+/// Upper bound on edge-disjoint opportunities analyzed per snapshot.
+const MAX_CYCLES_PER_SNAPSHOT: usize = 8;
+
 /// Run the backtest over the whole market.
 pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> BacktestReport {
     let base = TokenId(market.base_token.clone());
@@ -148,52 +151,56 @@ pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> B
             pools.insert(pool.id.clone(), pool);
         }
 
-        let Some(cycle) = graph.find_arbitrage() else {
-            continue;
-        };
-        report.candidates_found += 1;
+        // Detect several edge-disjoint opportunities per snapshot instead of a
+        // single one; each is sized and priced independently below, exactly as
+        // the single cycle used to be.
+        let cycles = graph.find_disjoint_arbitrage(MAX_CYCLES_PER_SNAPSHOT);
+        for cycle in &cycles {
+            report.candidates_found += 1;
 
-        // Size the trade at the input that maximizes *net* profit, capped by the
-        // risk ceiling. The cycle output is concave-increasing in the input
-        // while the input and the (linear) cost subtracted from it are linear,
-        // so net profit is unimodal and a ternary search finds the optimum.
-        // `simulate_cycle` is the per-size oracle; the hop count (and therefore
-        // the cost shape) is fixed for the cycle, so it is read once.
-        let hops = cycle.edges.len();
-        let max_input = u128::from(risk.max_position);
-        let net_at = |input: u128| -> Option<i128> {
-            let (_, out) = simulate_cycle(&pools, &cycle, &base, input)?;
-            let out = i128::try_from(out).ok()?;
-            let input_i = i128::try_from(input).ok()?;
-            let cost = i128::try_from(cost_model.total_cost(input, hops)).ok()?;
-            Some(out - input_i - cost)
-        };
-        let Some((notional, _)) = maximize_unimodal(max_input, net_at) else {
-            continue;
-        };
+            // Size the trade at the input that maximizes *net* profit, capped
+            // by the risk ceiling. The cycle output is concave-increasing in
+            // the input while the input and the (linear) cost subtracted from
+            // it are linear, so net profit is unimodal and a ternary search
+            // finds the optimum. `simulate_cycle` is the per-size oracle; the
+            // hop count (and therefore the cost shape) is fixed for the cycle,
+            // so it is read once.
+            let hops = cycle.edges.len();
+            let max_input = u128::from(risk.max_position);
+            let net_at = |input: u128| -> Option<i128> {
+                let (_, out) = simulate_cycle(&pools, cycle, &base, input)?;
+                let out = i128::try_from(out).ok()?;
+                let input_i = i128::try_from(input).ok()?;
+                let cost = i128::try_from(cost_model.total_cost(input, hops)).ok()?;
+                Some(out - input_i - cost)
+            };
+            let Some((notional, _)) = maximize_unimodal(max_input, net_at) else {
+                continue;
+            };
 
-        let Some((route, final_out)) = simulate_cycle(&pools, &cycle, &base, notional) else {
-            continue;
-        };
+            let Some((route, final_out)) = simulate_cycle(&pools, cycle, &base, notional) else {
+                continue;
+            };
 
-        let gross_profit = final_out as i128 - notional as i128;
-        let cost = cost_model.total_cost(notional, route.len()) as i128;
-        let net_profit = gross_profit - cost;
-        let submitted = net_profit >= i128::from(risk.min_profit);
+            let gross_profit = final_out as i128 - notional as i128;
+            let cost = cost_model.total_cost(notional, route.len()) as i128;
+            let net_profit = gross_profit - cost;
+            let submitted = net_profit >= i128::from(risk.min_profit);
 
-        if submitted {
-            report.profitable_after_costs += 1;
-            report.total_net_profit += net_profit;
+            if submitted {
+                report.profitable_after_costs += 1;
+                report.total_net_profit += net_profit;
+            }
+
+            report.records.push(TradeRecord {
+                ts: snap.ts,
+                route,
+                notional: Amount(notional.min(u128::from(u64::MAX)) as u64),
+                gross_profit,
+                net_profit,
+                submitted,
+            });
         }
-
-        report.records.push(TradeRecord {
-            ts: snap.ts,
-            route,
-            notional: Amount(notional.min(u128::from(u64::MAX)) as u64),
-            gross_profit,
-            net_profit,
-            submitted,
-        });
     }
 
     report
@@ -305,32 +312,48 @@ mod tests {
         };
 
         let report = run_backtest(&market, &risk(), &costs());
-        assert_eq!(report.candidates_found, 1);
-        let rec = &report.records[0];
-        // Route closes back to SOL.
-        assert_eq!(rec.route.first().unwrap().token_in, "SOL".into());
-        assert_eq!(rec.route.last().unwrap().token_out, "SOL".into());
-        // Gross profit is positive on this constructed mispricing.
-        assert!(rec.gross_profit > 0, "gross was {}", rec.gross_profit);
+        // At least one disjoint opportunity is detected and recorded. (The
+        // exact count is search-dependent, so we assert invariants, not a
+        // hardcoded number.)
+        assert!(report.candidates_found >= 1);
+        assert!(!report.records.is_empty());
 
-        // The chosen size respects the risk ceiling and is a real, positive
-        // notional rather than the old fixed `min(notional, max_position)`.
-        let chosen = u128::from(rec.notional.0);
-        assert!((1..=u128::from(risk().max_position)).contains(&chosen));
+        // Every record is well-formed: it has a route and is sized within the
+        // risk ceiling as a real, positive notional (never the old fixed
+        // `min(notional, max_position)`).
+        let max_pos = u128::from(risk().max_position);
+        for rec in &report.records {
+            assert!(!rec.route.is_empty());
+            let chosen = u128::from(rec.notional.0);
+            assert!((1..=max_pos).contains(&chosen));
+        }
 
-        // Optimality invariant: the net profit at the optimally sized trade is
-        // never worse than at the old fixed size. (Exact numbers now depend on
-        // the search and are verified by the property tests in `lorenz-amm`.)
+        // A genuine SOL -> ... -> SOL round-trip is submitted with positive
+        // gross profit on this constructed mispricing.
+        let sol: TokenId = "SOL".into();
+        let winner = report
+            .records
+            .iter()
+            .find(|r| {
+                r.submitted
+                    && r.route.first().is_some_and(|h| h.token_in == sol)
+                    && r.route.last().is_some_and(|h| h.token_out == sol)
+            })
+            .expect("a profitable SOL round-trip is submitted");
+        assert!(winner.gross_profit > 0, "gross was {}", winner.gross_profit);
+
+        // Optimality invariant: the first detected cycle (identical to
+        // `find_arbitrage`) is sized no worse than at the old fixed size.
+        // (Exact numbers now depend on the search and are verified by the
+        // property tests in `lorenz-amm`.)
         let fixed = u128::from(market.notional.min(risk().max_position));
         let fixed_net =
             first_cycle_net(&market, &risk(), &costs(), fixed).expect("fixed-size cycle simulates");
         assert!(
-            rec.net_profit >= fixed_net,
+            report.records[0].net_profit >= fixed_net,
             "optimal net {} < fixed net {fixed_net}",
-            rec.net_profit
+            report.records[0].net_profit
         );
-        // The constructed mispricing is large enough to remain profitable.
-        assert!(rec.submitted);
     }
 
     #[test]
