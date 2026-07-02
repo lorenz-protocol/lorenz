@@ -9,6 +9,23 @@ program are not yet stable.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-02
+
+### Added
+- `lorenz-graph`: `find_disjoint_arbitrage(max_cycles)` — detects multiple
+  edge-disjoint profitable cycles from a graph (the single-cycle `find_arbitrage`
+  is unchanged).
+- `lorenz-backtest`: a `--config <FILE>` flag to load risk and cost parameters
+  from an `EngineConfig` TOML file (the file must include an `[rpc]` section,
+  which the backtester does not use).
+- CI: a non-gating `cargo audit` job that reports RustSec advisories as warnings
+  without blocking merges or releases.
+
+### Changed
+- `lorenz-backtest`: each snapshot now detects and independently sizes several
+  edge-disjoint arbitrage opportunities (up to 8) instead of a single one;
+  `candidates_found` counts all of them.
+
 ## [0.3.0] - 2026-06-29
 
 ### Added
@@ -76,7 +93,8 @@ Initial public reference architecture.
 ### Notes
 - Experimental and unaudited. No profitability claims. MIT licensed.
 
-[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lorenz-protocol/lorenz/releases/tag/v0.1.0
