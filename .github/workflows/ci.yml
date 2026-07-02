@@ -69,3 +69,24 @@ jobs:
       - name: Build + test on-chain program
         working-directory: programs/executor
         run: cargo test --lib
+
+  # Advisory-only supply-chain scan against the RustSec advisory database.
+  # This job is intentionally NON-GATING: `continue-on-error: true` means a
+  # newly-published advisory surfaces as a warning without blocking merges or
+  # releases. It needs no repo config (unlike cargo-deny), so it stays
+  # self-contained here.
+  audit:
+    name: Supply-chain audit (advisories)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependencies
+        run: cargo audit
