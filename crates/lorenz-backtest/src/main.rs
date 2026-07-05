@@ -5,7 +5,13 @@
 //! cargo run -p lorenz-backtest -- --json                # bundled sample, JSON output
 //! cargo run -p lorenz-backtest -- --market market.json  # replay an external market
 //! cargo run -p lorenz-backtest -- --config engine.toml  # load risk/cost params from TOML
+//! cargo run -p lorenz-backtest -- --top 5               # human output: 5 best records
 //! ```
+//!
+//! `--top <N>` only affects the human output, where it prints just the `N`
+//! records with the highest net profit (with a header noting it is the top `N`
+//! of `M`). `--json` always emits the full report — every record plus the
+//! aggregate analytics — regardless of `--top`.
 //!
 //! Without `--market` everything is deterministic and self-contained: the
 //! sample market is embedded, so the numbers printed are reproducible by anyone
@@ -19,11 +25,12 @@
 //! but the file must still include a (dummy) `[rpc]` section with a `url` to
 //! parse successfully.
 
-use lorenz_backtest::{parse_market, run_backtest, BacktestReport, Market};
+use lorenz_backtest::{parse_market, run_backtest, top_by_net_profit, BacktestReport, Market};
 use lorenz_core::config::{CostConfig, EngineConfig, RiskConfig};
 use lorenz_core::telemetry::TradeRecord;
 use lorenz_core::types::Bps;
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 const SAMPLE_MARKET: &str = include_str!("../data/sample_market.json");
 
@@ -35,6 +42,7 @@ Replays a market (the bundled sample by default) and reports arbitrage economics
 Options:
   --market <FILE>  Replay an external market JSON file instead of the bundled sample
   --config <FILE>  Load risk/cost params from an EngineConfig TOML file (see note below)
+  --top <N>        Human output only: print just the N highest-net-profit records
   --json           Emit the full result as a single JSON document (no human output)
   -h, --help       Print this help and exit
 
@@ -45,14 +53,22 @@ it, but the file must still include a dummy [rpc] section to parse.";
 /// Machine-readable view of a backtest run.
 ///
 /// Borrows the aggregated [`BacktestReport`] and adds `snapshots_replayed` so
-/// the JSON carries exactly the same figures the human output reports. Field
-/// order is fixed and no maps are emitted, so the document is deterministic.
+/// the JSON carries exactly the same figures the human output reports, plus the
+/// aggregate analytics (`total_gross_profit`, best/worst net, hop histogram and
+/// submission rate). Field order is fixed and the one map (`hop_histogram`) is a
+/// `BTreeMap`, which serializes keys in ascending order, so the document is
+/// deterministic. Always carries the full record set regardless of `--top`.
 #[derive(Debug, Serialize)]
 struct JsonReport<'a> {
     snapshots_replayed: usize,
     candidates_found: usize,
     profitable_after_costs: usize,
+    submission_rate: f64,
     total_net_profit: i128,
+    total_gross_profit: i128,
+    best_net_profit: i128,
+    worst_net_profit: i128,
+    hop_histogram: &'a BTreeMap<usize, usize>,
     records: &'a [TradeRecord],
 }
 
@@ -62,7 +78,12 @@ impl<'a> JsonReport<'a> {
             snapshots_replayed,
             candidates_found: report.candidates_found,
             profitable_after_costs: report.profitable_after_costs,
+            submission_rate: report.submission_rate(),
             total_net_profit: report.total_net_profit,
+            total_gross_profit: report.total_gross_profit,
+            best_net_profit: report.best_net_profit,
+            worst_net_profit: report.worst_net_profit,
+            hop_histogram: &report.hop_histogram,
             records: &report.records,
         }
     }
@@ -111,10 +132,24 @@ fn load_engine_config(path: &str) -> Result<EngineConfig, String> {
         .map_err(|e| format!("failed to parse config file '{path}': {e}"))
 }
 
+/// Parse the `--top` count, exiting with usage on a malformed value. Kept as a
+/// helper so the two-token (`--top N`) and `--top=N` forms share one parser.
+fn parse_top_arg(raw: &str) -> usize {
+    match raw.parse::<usize>() {
+        Ok(n) => n,
+        Err(_) => {
+            eprintln!("error: --top expects a non-negative integer, got '{raw}'");
+            eprintln!("{USAGE}");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn main() {
     let mut json = false;
     let mut market_path: Option<String> = None;
     let mut config_path: Option<String> = None;
+    let mut top: Option<usize> = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -140,11 +175,21 @@ fn main() {
                 };
                 config_path = Some(path);
             }
+            "--top" => {
+                let Some(raw) = args.next() else {
+                    eprintln!("error: --top requires an <N> count argument");
+                    eprintln!("{USAGE}");
+                    std::process::exit(2);
+                };
+                top = Some(parse_top_arg(&raw));
+            }
             other => {
                 if let Some(path) = other.strip_prefix("--market=") {
                     market_path = Some(path.to_string());
                 } else if let Some(path) = other.strip_prefix("--config=") {
                     config_path = Some(path.to_string());
+                } else if let Some(raw) = other.strip_prefix("--top=") {
+                    top = Some(parse_top_arg(raw));
                 } else {
                     eprintln!("error: unknown flag '{other}'");
                     eprintln!("{USAGE}");
@@ -200,8 +245,27 @@ fn main() {
         "  total net profit   : {} base units",
         report.total_net_profit
     );
+    println!(
+        "  total gross profit : {} base units",
+        report.total_gross_profit
+    );
+    println!("  best / worst net   : {} / {}", report.best_net_profit, report.worst_net_profit);
+    println!("  submission rate    : {:.3}", report.submission_rate());
     println!();
-    for rec in &report.records {
+
+    // `--top N` narrows the human output to the N highest-net records (stable
+    // tie-break by original order); the full set is printed otherwise. `--json`
+    // is unaffected and always emits every record.
+    let total = report.records.len();
+    let indices: Vec<usize> = match top {
+        Some(n) => {
+            println!("  showing top {n} of {total} records (by net profit)");
+            top_by_net_profit(&report.records, n)
+        }
+        None => (0..total).collect(),
+    };
+    for &i in &indices {
+        let rec = &report.records[i];
         let mut route: Vec<String> = rec.route.iter().map(|h| h.token_in.0.clone()).collect();
         if let Some(last) = rec.route.last() {
             route.push(last.token_out.0.clone());

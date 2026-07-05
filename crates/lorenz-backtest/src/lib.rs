@@ -20,7 +20,7 @@ use lorenz_core::types::{Amount, Bps, Dex, PoolId, TokenId};
 use lorenz_dex::{CpmmPool, Quoter};
 use lorenz_graph::{ArbitrageGraph, Cycle};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Serializable pool snapshot (the on-disk / on-wire form).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +93,29 @@ pub struct BacktestReport {
     pub records: Vec<TradeRecord>,
     pub candidates_found: usize,
     pub profitable_after_costs: usize,
+    /// Sum of `net_profit` over the *submitted* records (the money path).
     pub total_net_profit: i128,
+    /// Sum of `gross_profit` over *all* records (submitted or not).
+    pub total_gross_profit: i128,
+    /// Highest `net_profit` across all records, or `0` when there are none.
+    pub best_net_profit: i128,
+    /// Lowest `net_profit` across all records, or `0` when there are none.
+    pub worst_net_profit: i128,
+    /// Count of records grouped by route hop-count. A `BTreeMap` is used so the
+    /// serialized form is deterministic (keys emitted in ascending order).
+    pub hop_histogram: BTreeMap<usize, usize>,
+}
+
+impl BacktestReport {
+    /// Fraction of candidate cycles that were actually submitted, in `0.0..=1.0`
+    /// (`0.0` when no candidates were found). This is a reporting metric only,
+    /// never part of the money path, so `f64` is acceptable here.
+    pub fn submission_rate(&self) -> f64 {
+        if self.candidates_found == 0 {
+            return 0.0;
+        }
+        self.profitable_after_costs as f64 / self.candidates_found as f64
+    }
 }
 
 /// Walk a detected cycle hop-by-hop using exact pool math, returning the route
@@ -151,10 +173,12 @@ pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> B
             pools.insert(pool.id.clone(), pool);
         }
 
-        // Detect several edge-disjoint opportunities per snapshot instead of a
+        // Detect several pool-disjoint opportunities per snapshot instead of a
         // single one; each is sized and priced independently below, exactly as
-        // the single cycle used to be.
-        let cycles = graph.find_disjoint_arbitrage(MAX_CYCLES_PER_SNAPSHOT);
+        // the single cycle used to be. Pool-disjoint (no shared pool between
+        // cycles) mirrors the live engine: two cycles that touch the same pool
+        // can't both execute against the same reserves in one bundle.
+        let cycles = graph.find_pool_disjoint_arbitrage(MAX_CYCLES_PER_SNAPSHOT);
         for cycle in &cycles {
             report.candidates_found += 1;
 
@@ -192,6 +216,17 @@ pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> B
                 report.total_net_profit += net_profit;
             }
 
+            // Aggregate analytics over *all* records (submitted or not).
+            report.total_gross_profit += gross_profit;
+            if report.records.is_empty() {
+                report.best_net_profit = net_profit;
+                report.worst_net_profit = net_profit;
+            } else {
+                report.best_net_profit = report.best_net_profit.max(net_profit);
+                report.worst_net_profit = report.worst_net_profit.min(net_profit);
+            }
+            *report.hop_histogram.entry(route.len()).or_insert(0) += 1;
+
             report.records.push(TradeRecord {
                 ts: snap.ts,
                 route,
@@ -204,6 +239,20 @@ pub fn run_backtest(market: &Market, risk: &RiskConfig, costs: &CostConfig) -> B
     }
 
     report
+}
+
+/// Select the indices of the `n` records with the highest `net_profit`, most
+/// profitable first, breaking ties by original position (stable). Returns at
+/// most `min(n, records.len())` indices; an empty slice or `n == 0` yields an
+/// empty vector. Kept as a pure, index-returning helper so it is trivially
+/// testable and so callers can render the originals without cloning them.
+pub fn top_by_net_profit(records: &[TradeRecord], n: usize) -> Vec<usize> {
+    let mut indices: Vec<usize> = (0..records.len()).collect();
+    // Sort by net_profit descending; `sort_by` is stable, so equal-profit
+    // records keep their original relative order (the tie-break).
+    indices.sort_by(|&a, &b| records[b].net_profit.cmp(&records[a].net_profit));
+    indices.truncate(n);
+    indices
 }
 
 /// Parse a market from JSON.
@@ -389,6 +438,85 @@ mod tests {
         assert_eq!(parsed.candidates_found, report.candidates_found);
         assert_eq!(parsed.profitable_after_costs, report.profitable_after_costs);
         assert_eq!(parsed.total_net_profit, report.total_net_profit);
+        assert_eq!(parsed.total_gross_profit, report.total_gross_profit);
+        assert_eq!(parsed.best_net_profit, report.best_net_profit);
+        assert_eq!(parsed.worst_net_profit, report.worst_net_profit);
+        assert_eq!(parsed.hop_histogram, report.hop_histogram);
         assert_eq!(parsed.records, report.records);
+    }
+
+    /// A report with at least one record, replayed from the bundled sample so
+    /// the aggregate analytics are exercised against real computed figures.
+    fn sample_report() -> BacktestReport {
+        const SAMPLE_MARKET: &str = include_str!("../data/sample_market.json");
+        let market = parse_market(SAMPLE_MARKET).expect("bundled sample market is valid JSON");
+        run_backtest(&market, &risk(), &costs())
+    }
+
+    #[test]
+    fn best_is_never_below_worst() {
+        let report = sample_report();
+        assert!(report.best_net_profit >= report.worst_net_profit);
+    }
+
+    #[test]
+    fn hop_histogram_counts_every_record() {
+        let report = sample_report();
+        let total: usize = report.hop_histogram.values().sum();
+        assert_eq!(total, report.records.len());
+    }
+
+    #[test]
+    fn total_gross_matches_record_sum() {
+        let report = sample_report();
+        let sum: i128 = report.records.iter().map(|r| r.gross_profit).sum();
+        assert_eq!(report.total_gross_profit, sum);
+    }
+
+    #[test]
+    fn submission_rate_is_a_valid_fraction() {
+        let report = sample_report();
+        let rate = report.submission_rate();
+        assert!((0.0..=1.0).contains(&rate));
+        if report.candidates_found == 0 {
+            assert_eq!(rate, 0.0);
+        } else {
+            let expected = report.profitable_after_costs as f64 / report.candidates_found as f64;
+            assert_eq!(rate, expected);
+        }
+    }
+
+    #[test]
+    fn best_and_worst_bracket_every_record() {
+        let report = sample_report();
+        for rec in &report.records {
+            assert!(rec.net_profit <= report.best_net_profit);
+            assert!(rec.net_profit >= report.worst_net_profit);
+        }
+    }
+
+    #[test]
+    fn top_by_net_profit_picks_the_highest_stably() {
+        // net profits: [5, 1, 5, 9, 1]. Descending with stable tie-break by
+        // original index: 9 (idx 3), 5 (idx 0), 5 (idx 2), 1 (idx 1), 1 (idx 4).
+        let nets = [5_i128, 1, 5, 9, 1];
+        let records: Vec<TradeRecord> = nets
+            .iter()
+            .map(|&net| TradeRecord {
+                ts: 0,
+                route: Vec::new(),
+                notional: Amount(0),
+                gross_profit: net,
+                net_profit: net,
+                submitted: false,
+            })
+            .collect();
+
+        assert_eq!(top_by_net_profit(&records, 3), vec![3, 0, 2]);
+        // n larger than the slice returns all indices (still ordered).
+        assert_eq!(top_by_net_profit(&records, 99), vec![3, 0, 2, 1, 4]);
+        // n == 0 and empty input both yield nothing.
+        assert!(top_by_net_profit(&records, 0).is_empty());
+        assert!(top_by_net_profit(&[], 3).is_empty());
     }
 }
