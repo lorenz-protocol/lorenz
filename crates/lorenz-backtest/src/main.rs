@@ -249,7 +249,10 @@ fn main() {
         "  total gross profit : {} base units",
         report.total_gross_profit
     );
-    println!("  best / worst net   : {} / {}", report.best_net_profit, report.worst_net_profit);
+    println!(
+        "  best / worst net   : {} / {}",
+        report.best_net_profit, report.worst_net_profit
+    );
     println!("  submission rate    : {:.3}", report.submission_rate());
     println!();
 
