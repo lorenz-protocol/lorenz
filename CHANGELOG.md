@@ -9,6 +9,24 @@ program are not yet stable.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-05
+
+### Added
+- `lorenz-graph`: `find_pool_disjoint_arbitrage(max_cycles)` — returns pairwise
+  pool-disjoint profitable cycles (no shared `PoolId`) so opportunities can be
+  sized and executed independently without reserve interaction.
+- `lorenz-backtest`: aggregate analytics on `BacktestReport` (total gross profit,
+  best/worst net, route hop histogram, `submission_rate`), surfaced in `--json`
+  and the human summary, plus a `--top N` flag to show only the most profitable
+  trades.
+- `lorenz-core`: `EngineConfig::validate` — strict range-validation (rejects an
+  empty `rpc.url`, a zero `max_position`, and flash-loan/slippage fees above
+  100%), enforced on load by `from_toml`.
+
+### Changed
+- `lorenz-backtest`: opportunity detection now uses the pool-disjoint selector,
+  so trades reported per snapshot never share a pool.
+
 ## [0.4.0] - 2026-07-02
 
 ### Added
@@ -93,7 +111,8 @@ Initial public reference architecture.
 ### Notes
 - Experimental and unaudited. No profitability claims. MIT licensed.
 
-[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lorenz-protocol/lorenz/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lorenz-protocol/lorenz/compare/v0.1.0...v0.2.0
