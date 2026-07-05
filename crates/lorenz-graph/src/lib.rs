@@ -354,7 +354,9 @@ mod tests {
     }
 
     fn share_a_pool(a: &Cycle, b: &Cycle) -> bool {
-        a.edges.iter().any(|ea| b.edges.iter().any(|eb| ea.pool == eb.pool))
+        a.edges
+            .iter()
+            .any(|ea| b.edges.iter().any(|eb| ea.pool == eb.pool))
     }
 
     /// A graph holding two independent triangular opportunities on disjoint
@@ -531,7 +533,10 @@ mod tests {
         assert_eq!(a, b);
 
         let g2 = two_edge_disjoint_but_pool_sharing();
-        assert_eq!(g2.find_pool_disjoint_arbitrage(8), g2.find_pool_disjoint_arbitrage(8));
+        assert_eq!(
+            g2.find_pool_disjoint_arbitrage(8),
+            g2.find_pool_disjoint_arbitrage(8)
+        );
     }
 
     #[test]
