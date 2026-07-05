@@ -175,6 +175,82 @@ impl ArbitrageGraph {
     ///
     /// [`find_arbitrage`]: Self::find_arbitrage
     pub fn find_disjoint_arbitrage(&self, max_cycles: usize) -> Vec<Cycle> {
+        // Removal strategy: drop exactly the cycle's own directed edges (each
+        // matched once, by `(from, to, pool, rate)` value), which is what makes
+        // subsequent cycles edge-disjoint from this one.
+        self.accumulate_disjoint(max_cycles, |working, cycle| {
+            let mut removed = 0usize;
+            for ce in &cycle.edges {
+                if let Some(pos) = working.iter().position(|e| e == ce) {
+                    working.remove(pos);
+                    removed += 1;
+                }
+            }
+            removed
+        })
+    }
+
+    /// Find up to `max_cycles` profitable cycles that are pairwise
+    /// **pool-disjoint**: no two returned cycles share any `PoolId`.
+    ///
+    /// This is a strictly stronger guarantee than [`find_disjoint_arbitrage`],
+    /// which only rules out shared *directed edges*. Two cycles can be
+    /// edge-disjoint yet still touch the same pool (a pool contributes edges in
+    /// both directions, and a multi-asset pool contributes edges among several
+    /// pairs). Such cycles would compete on that pool's reserves at execution,
+    /// so they cannot be sized independently. Requiring pool-disjointness makes
+    /// the returned opportunities independently executable.
+    ///
+    /// The loop mirrors [`find_disjoint_arbitrage`]: it finds one profitable
+    /// cycle over a working copy of the edge set, records it, then prunes the
+    /// working set. The only difference is the pruning rule — after accepting a
+    /// cycle we collect the set of `PoolId`s it uses and retain only edges whose
+    /// `pool` is not in that set, removing *every* edge on any of those pools
+    /// (not just the cycle's own edges). This is what forbids a later cycle from
+    /// reusing any of those pools.
+    ///
+    /// Termination: an accepted cycle's edges are all present in the working
+    /// set, so their pools are too; retaining "pool not used" therefore removes
+    /// at least the cycle's own edges (>= 1). A defensive break also stops the
+    /// loop if a prune ever removes nothing, keeping termination unconditional
+    /// (at most `edge_count()` iterations).
+    ///
+    /// Determinism: the working set is a `Vec` seeded from insertion order and
+    /// only ever has elements removed in place (`retain` preserves order), so
+    /// output never depends on `HashMap` iteration order. Given the same graph,
+    /// the returned cycles and their order are identical across runs.
+    ///
+    /// `max_cycles == 0` returns an empty vector. The result length is always
+    /// `<= max_cycles` and `<= edge_count()`.
+    ///
+    /// [`find_arbitrage`]: Self::find_arbitrage
+    /// [`find_disjoint_arbitrage`]: Self::find_disjoint_arbitrage
+    pub fn find_pool_disjoint_arbitrage(&self, max_cycles: usize) -> Vec<Cycle> {
+        // Removal strategy: drop every edge whose pool is used anywhere by the
+        // accepted cycle, which is what makes subsequent cycles pool-disjoint
+        // from this one.
+        self.accumulate_disjoint(max_cycles, |working, cycle| {
+            let pools: Vec<PoolId> = cycle.edges.iter().map(|e| e.pool.clone()).collect();
+            let before = working.len();
+            working.retain(|e| !pools.contains(&e.pool));
+            before - working.len()
+        })
+    }
+
+    /// Shared driver for the disjoint-cycle searches.
+    ///
+    /// Repeatedly finds one profitable cycle over a working copy of the edge
+    /// set (reusing the exact [`find_arbitrage`] Bellman-Ford search), records
+    /// it, and then applies `prune` to remove edges from the working set before
+    /// searching again. `prune` returns how many edges it removed; if it ever
+    /// removes zero the loop breaks, guaranteeing forward progress and
+    /// termination regardless of the strategy.
+    ///
+    /// [`find_arbitrage`]: Self::find_arbitrage
+    fn accumulate_disjoint<F>(&self, max_cycles: usize, mut prune: F) -> Vec<Cycle>
+    where
+        F: FnMut(&mut Vec<Edge>, &Cycle) -> usize,
+    {
         let mut result = Vec::new();
         if max_cycles == 0 {
             return result;
@@ -195,20 +271,11 @@ impl ArbitrageGraph {
                 break;
             };
 
-            // Remove this cycle's edges from the working set so subsequent
-            // searches cannot reuse them. This both enforces edge-disjointness
-            // and guarantees forward progress (>= 1 edge removed per cycle).
-            let mut removed = 0usize;
-            for ce in &cycle.edges {
-                if let Some(pos) = working.iter().position(|e| e == ce) {
-                    working.remove(pos);
-                    removed += 1;
-                }
-            }
+            // Prune per the caller's strategy. A cycle's edges came from
+            // `working`, so a correct strategy removes >= 1; a zero return is
+            // treated as no progress and stops the loop.
+            let removed = prune(&mut working, &cycle);
             if removed == 0 {
-                // Defensive: nothing removed would mean no progress. This
-                // should be unreachable since every cycle edge came from
-                // `working`, but breaking keeps termination unconditional.
                 break;
             }
 
@@ -284,6 +351,10 @@ mod tests {
 
     fn share_an_edge(a: &Cycle, b: &Cycle) -> bool {
         a.edges.iter().any(|ea| b.edges.iter().any(|eb| ea == eb))
+    }
+
+    fn share_a_pool(a: &Cycle, b: &Cycle) -> bool {
+        a.edges.iter().any(|ea| b.edges.iter().any(|eb| ea.pool == eb.pool))
     }
 
     /// A graph holding two independent triangular opportunities on disjoint
@@ -370,5 +441,115 @@ mod tests {
         let a = g.find_disjoint_arbitrage(8);
         let b = g.find_disjoint_arbitrage(8);
         assert_eq!(a, b);
+    }
+
+    /// Two profitable triangles on disjoint token sets that nonetheless share a
+    /// single pool: each triangle's closing edge sits on `pShared` (as a
+    /// multi-asset pool would, contributing edges between different pairs). The
+    /// triangles are edge-disjoint (every directed edge is distinct) but not
+    /// pool-disjoint.
+    fn two_edge_disjoint_but_pool_sharing() -> ArbitrageGraph {
+        let mut g = ArbitrageGraph::new();
+        // Triangle 1: A -> B -> C -> A, product 1.1 > 1. Closes on `pShared`.
+        g.add_edge(edge("A", "B", "p1", 1.0));
+        g.add_edge(edge("B", "C", "p2", 1.0));
+        g.add_edge(edge("C", "A", "pShared", 1.1));
+        // Triangle 2: D -> E -> F -> D, product 1.2 > 1. Also closes on
+        // `pShared`, so the two triangles collide on that pool's reserves.
+        g.add_edge(edge("D", "E", "p4", 1.0));
+        g.add_edge(edge("E", "F", "p5", 1.0));
+        g.add_edge(edge("F", "D", "pShared", 1.2));
+        g
+    }
+
+    #[test]
+    fn pool_disjoint_zero_cap_returns_empty() {
+        let g = two_disjoint_opportunities();
+        assert!(g.find_pool_disjoint_arbitrage(0).is_empty());
+    }
+
+    #[test]
+    fn pool_disjoint_no_opportunity_returns_empty() {
+        let mut g = ArbitrageGraph::new();
+        g.add_edge(edge("A", "B", "p1", 2.0));
+        g.add_edge(edge("B", "A", "p1", 0.5)); // product = 1
+        assert!(g.find_pool_disjoint_arbitrage(8).is_empty());
+    }
+
+    #[test]
+    fn pool_disjoint_single_opportunity_returns_exactly_one() {
+        let mut g = ArbitrageGraph::new();
+        g.add_edge(edge("A", "B", "p1", 1.0));
+        g.add_edge(edge("B", "C", "p2", 1.0));
+        g.add_edge(edge("C", "A", "p3", 1.1));
+
+        let cycles = g.find_pool_disjoint_arbitrage(8);
+        assert_eq!(cycles.len(), 1);
+        assert!(is_profitable(&cycles[0]));
+        assert!(cycles[0].product > 1.0);
+    }
+
+    #[test]
+    fn pool_disjoint_finds_both_when_pools_distinct() {
+        // Distinct pools per edge, so pool-disjointness coincides with
+        // edge-disjointness here: both opportunities are returned.
+        let g = two_disjoint_opportunities();
+        let cycles = g.find_pool_disjoint_arbitrage(8);
+
+        assert_eq!(cycles.len(), 2);
+
+        for c in &cycles {
+            assert!(is_profitable(c), "product was {}", c.product);
+            assert!(c.product > 1.0);
+        }
+
+        // Pairwise pool-disjoint (and therefore also edge-disjoint).
+        for (i, ci) in cycles.iter().enumerate() {
+            for cj in &cycles[i + 1..] {
+                assert!(!share_a_pool(ci, cj));
+                assert!(!share_an_edge(ci, cj));
+            }
+        }
+
+        assert!(cycles.len() <= 8);
+        assert!(cycles.len() <= g.edge_count());
+    }
+
+    #[test]
+    fn pool_disjoint_respects_max_cycles_cap() {
+        let g = two_disjoint_opportunities();
+        let cycles = g.find_pool_disjoint_arbitrage(1);
+        assert_eq!(cycles.len(), 1);
+        assert!(is_profitable(&cycles[0]));
+    }
+
+    #[test]
+    fn pool_disjoint_output_is_deterministic() {
+        let g = two_disjoint_opportunities();
+        let a = g.find_pool_disjoint_arbitrage(8);
+        let b = g.find_pool_disjoint_arbitrage(8);
+        assert_eq!(a, b);
+
+        let g2 = two_edge_disjoint_but_pool_sharing();
+        assert_eq!(g2.find_pool_disjoint_arbitrage(8), g2.find_pool_disjoint_arbitrage(8));
+    }
+
+    #[test]
+    fn pool_sharing_yields_one_where_edge_disjoint_yields_two() {
+        let g = two_edge_disjoint_but_pool_sharing();
+
+        // The edge-disjoint search sees two independent opportunities: the two
+        // triangles share no directed edge.
+        let edge_disjoint = g.find_disjoint_arbitrage(8);
+        assert_eq!(edge_disjoint.len(), 2);
+        // They do, however, share a pool -- so they are NOT pool-disjoint.
+        assert!(share_a_pool(&edge_disjoint[0], &edge_disjoint[1]));
+
+        // The pool-disjoint search rejects the second: accepting one triangle
+        // removes every edge on `pShared`, which severs the other triangle.
+        let pool_disjoint = g.find_pool_disjoint_arbitrage(8);
+        assert_eq!(pool_disjoint.len(), 1);
+        assert!(is_profitable(&pool_disjoint[0]));
+        assert!(pool_disjoint[0].product > 1.0);
     }
 }
